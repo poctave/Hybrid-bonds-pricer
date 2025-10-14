@@ -1,0 +1,706 @@
+import numpy as np
+import pandas as pd
+from datetime import date, timedelta
+import matplotlib.pyplot as plt
+import matplotlib.markers as mk
+import matplotlib.ticker as mtick
+import bql
+import ipywidgets as widgets
+import plotly.express as px
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from functools import partial
+from IPython.display import HTML, display, clear_output
+import base64
+import os
+
+bq = bql.Service()
+
+#Code by: Octave Suprano (octave.suprano@cic.fr)
+# Ticker mapping for dropdown (and universe build)
+tickers_mapping = {
+# Suivi Trading ------------------------------------------    
+'ABERTIS': ("1670599D SM Equity", "Infrastructure"),
+'ACCOR': ("AC FP Equity", "Consumer Services"),
+'ALSTOM': ("ALO FP Equity", "Industrials"),
+'ARKEMA': ("AKE FP Equity", "Chemicals"),
+'BRITISH TEL': ("BT/A LN Equity", "Telecommunications"), #PLus d'hybrides EUR
+'BAYER': ("BAYN GR Equity", "Healthcare"),
+'BERTELSMANN': ("BTG GR Equity", "Consumer Services"),
+'DSM': ("DSM NA Equity", "Chemicals"),
+'DANONE': ("BN FP Equity", "Consumer Goods"),
+'DEUTSCHE BOERSE': ("DB1 GR Equity", "Financials"),
+'MERCK': ("MRK GR Equity", "Healthcare"),
+'EDP': ("EDP PL Equity", "Utilities"),
+'ELIA': ("ELI BB Equity", "Utilities"),
+'ENGIE': ("ENGI FP Equity", "Utilities"),
+'EUROCLEAR': ("1170Z BB Equity", "Financials"),
+'EUROFINS': ("ERF FP Equity", "Healthcare"),
+'EDF': ("EDF FP Equity", "Utilities"),
+'IBERDROLA': ("IBE SM Equity", "Utilities"),
+'INFINEON': ("IFX GR Equity", "Technology"),
+'LUFTHANSA': ("LHA GR Equity", "Consumer Services"),
+'PROXIMUS': ("PROX BB Equity", "Telecommunications"),
+'VATTENFALL': ("VATT SS Equity", "Utilities"),
+'KPN': ("KPN NA Equity", "Telecommunications"),
+'ORANGE': ("ORA FP Equity", "Telecommunications"),
+'EVONIK': ("EVK GR Equity", "Chemicals"),
+'RED ELECTRICA': ("RED SM Equity", "Utilities"),
+'ROQUETTE FRERES': ("211710Z FP Equity", "Consumer Goods"),
+'SYENSQO': ("SYENS BB Equity", "Chemicals"),
+'TELEFONICA': ("TEF SM Equity", "Telecommunications"),
+'TERNA': ("TRN IM Equity", "Utilities"),
+'UNIBAIL-RW': ("URW NA Equity", "Real Estate"),
+'VEOLIA': ("VIE FP Equity", "Utilities"),
+'VODAFONE': ("VOD LN Equity", "Telecommunications"),
+'VOLKSWAGEN': ("VOW GR Equity", "Consumer Goods"),
+
+# Ajouts ------------------------------------------    
+'TOTAL ENERGIES': ("TTE FP Equity", "Utilities"),
+'A2A': ('A2A IM Equity', 'Utilities'),
+'ADECCO': ('ADEC SW Equity', 'Consumer Services'),
+'AIR FRANCE-KLM': ('AF FP Equity', 'Consumer Services'),
+'AKELIUS': ('AKEL SS Equity', 'Real Estate'),
+'ALLIANDER': ('ALLIA NA Equity', 'Utilities'),
+'APA': ('APA AU Equity', 'Energy'),
+'AROUNDTOWN': ('AT1 GR Equity', 'Real Estate'),
+'AROUNDTOWN Finance': ('ATW GR Equity', 'Real Estate'),
+#'AT&S': ('ATS AV Equity', 'Technology'),
+'AUSNET': ('AST AU Equity', 'Utilities'),
+'BERTELSMANN': ('BTG GR Equity', 'Consumer Services'),
+'BP': ('BP/ LN Equity', 'Energy'),
+'BRITISH AMERICAN TOBACCO': ('BATS LN Equity', 'Consumer Goods'),
+'CASTELLUM': ('CAST SS Equity', 'Real Estate'),
+'CITYCON': ('CITYA FH Equity', 'Real Estate'),
+'CLARIANE': ('CLARI FP Equity', 'Healthcare'),
+'CPI PROPERTY GROUP': ('CPI PR Equity', 'Real Estate'),
+'DEUTSCHE BAHN': ('DBN GR Equity', 'Industrials'),
+'EESTI ENERGIA': ('EEG1T EE Equity', 'Utilities'),
+'ENBW': ('EBK GR Equity', 'Utilities'),
+'ENEL': ('ENEL IM Equity', 'Utilities'),
+'ENI': ('ENI IM Equity', 'Energy'),
+'BALDER': ('BALDA SS Equity', 'Real Estate'),
+'G CITY': ('GCE GR Equity', 'Real Estate'),
+'GAZPROM': ('GAZPRM RU Equity', 'Energy'),
+'GRAND CITY PROPERTIES': ('GYC GR Equity', 'Real Estate'),
+'HEIMSTADEN': ('HEIM SS Equity', 'Real Estate'),
+'HEIMSTADEN BOSTAD': ('HEIMS SS Equity', 'Real Estate'),
+'IREN': ('IRE IM Equity', 'Utilities'),
+'JT INTERNATIONAL': ('JTI SW Equity', 'Consumer Goods'),
+'FRIESLANDCAMPINA': ('FCANG NA Equity', 'Consumer Goods'),
+'KPN': ('KPN NA Equity', 'Telecommunications'),
+'LA POSTE': ('LAPO FP Equity', 'Consumer Services'),
+#'LENZING': ('LNZ AV Equity', 'Chemicals'),
+'MERCK': ('MRK GR Equity', 'Healthcare'),
+'NATURGY': ('NTGY SM Equity', 'Utilities'),
+'NGG': ('NG/ LN Equity', 'Utilities'),
+'OMV': ('OMV AV Equity', 'Energy'),
+'ORSTED': ('ORSTED DC Equity', 'Utilities'),
+'POSTE ITALIANE': ('PST IM Equity', 'Consumer Services'),
+'PRYSMIAN': ('PRY IM Equity', 'Industrials'),
+#'RAKUTEN': ('4755 JP Equity', 'Consumer Services'),
+'REDEIA': ('RED SM Equity', 'Utilities'),
+'REPSOL': ('REP SM Equity', 'Energy'),
+'RWE': ('RWE GR Equity', 'Utilities'),
+'SECHE ENVIRONNEMENT': ('SCHP FP Equity', 'Utilities'),
+'SES': ('SESG FP Equity', 'Consumer Services'),
+'SNAM': ('SRG IM Equity', 'Utilities'),
+'SOUTHERN CO': ('SO US Equity', 'Utilities'),
+'SSE': ('SSE LN Equity', 'Utilities'),
+'STEDIN': ('STEDIN NA Equity', 'Utilities'),
+'SUDZUCKER': ('SUD GR Equity', 'Consumer Goods'),
+'TELIA': ('TELIA SS Equity', 'Telecommunications'),
+'TENNET': ('TENNET NA Equity', 'Utilities'),
+'TERNA': ('TRN IM Equity', 'Utilities'),
+'VANTIVA': ('VANT FP Equity', 'Consumer Services'),
+'VAR ENERGI': ('VARNER NO Equity', 'Energy'),
+'WINTERSHALL DEA': ('WINT GR Equity', 'Energy')
+}
+def get_historical_data(input_ticker, lookback_days=15, zscore_rolling_days=15, regression_type='nelson_siegel_svenson'):
+    """Retrieves historical SSS data for a specific ticker using execute_many for better performance."""
+
+    # Fix date range to avoid future dates
+    end_date = pd.Timestamp.today().normalize()
+    start_date = end_date - pd.Timedelta(days=lookback_days)
+
+    # Generate business days only (exclude weekends)
+    date_list = pd.bdate_range(start=start_date, end=end_date)
+
+    # First, get the hybrid bonds to determine call dates (current data only)
+    univ_hybrid = (
+        bq.univ.bonds(input_ticker)
+        .filter(
+            (bq.data.crncy() == "eur")
+            .and_(bq.data.hybrid() == 'true')
+            .and_(bq.data.amt_outstanding() > '400m')
+        )
+    )
+
+    fields_hybrid = [
+        bq.data.name(),
+        bq.data.issue_dt(),
+        bq.data.nxt_call_dt(),
+        bq.data.cast_parent_equity_ticker(),
+        bq.data.spread(spread_type='Z')
+    ]
+
+    # Get current hybrid bond info to determine structure
+    try:
+        request_hybrid_current = bql.Request(univ_hybrid, fields_hybrid)
+        response_hybrid_current = bq.execute(request_hybrid_current)
+        results_hybrid_current = [resp.df() for resp in response_hybrid_current]
+        results_hybrid = pd.concat(results_hybrid_current, axis=1)
+        results_hybrid.columns = ["NAME", "ISSUE DT", "NXT CALL DT", "ISSUER", "Z-Spread Date", "Z-Spread"]
+
+        # Calculate call date in years
+        results_hybrid["NXT CALL DT (Year)"] = (
+            (results_hybrid["NXT CALL DT"] - pd.Timestamp.today()).dt.days / 365.25
+        )
+
+        if len(results_hybrid) == 0:
+            print("No hybrid bonds found for this ticker")
+            return pd.DataFrame(), pd.DataFrame()
+
+    except Exception as e:
+        print(f"Error fetching hybrid bond info: {e}")
+        return pd.DataFrame(), pd.DataFrame()
+
+    # Create request functions for execute_many
+    def get_regression_request(ticker, date_str):
+        univ_senior = (
+            bq.univ.bonds(ticker)
+            .filter(
+                (bq.data.crncy() == "eur")
+                .and_(bq.data.maturity() < '30y')
+                .and_(bq.data.amt_outstanding() > '400m')
+            )
+        )
+
+        fields_regression = {}
+        for i, tenor in enumerate(results_hybrid["NXT CALL DT (Year)"]):
+            if pd.notna(tenor) and tenor > 0:  # Only valid tenors
+                fields_regression[f"regression_{i}"] = bq.data.regression(
+                    reg_by=bq.data.maturity_years().group(),
+                    reg_value=bq.data.spread(st='z').group(),
+                    regression_points=tenor,
+                    regression_type=regression_type
+                )
+
+        if not fields_regression:
+            return None
+
+        return bql.Request(univ_senior, fields_regression, with_params={'dates': date_str, 'fill':'prev'})
+
+    def get_hybrid_request(ticker, date_str):
+        return bql.Request(univ_hybrid, fields_hybrid, with_params={'dates': date_str, 'fill':'prev'})
+
+    # Generate all requests
+    regression_requests = []
+    hybrid_requests = []
+    valid_dates = []
+
+    for dt in date_list:
+        date_str = dt.strftime('%Y-%m-%d')
+
+        reg_req = get_regression_request(input_ticker, date_str)
+        hyb_req = get_hybrid_request(input_ticker, date_str)
+
+        if reg_req is not None:
+            regression_requests.append(reg_req)
+            hybrid_requests.append(hyb_req)
+            valid_dates.append(dt)
+
+    if not regression_requests:
+        print("No valid requests generated")
+        return pd.DataFrame(), results_hybrid
+
+    try:
+        regression_responses = list(bq.execute_many(regression_requests))
+        hybrid_responses = list(bq.execute_many(hybrid_requests))
+    except Exception as e:
+        print(f"Error executing BQL requests: {e}")
+        return pd.DataFrame(), results_hybrid
+
+    # Process all responses
+    all_results = []
+
+    for i, (reg_res, hyb_res, date_dt) in enumerate(zip(regression_responses, hybrid_responses, valid_dates)):
+        date_str = date_dt.strftime('%Y-%m-%d')
+
+        try:
+            # Process regression results with error handling
+            try:
+                reg_dfs = [r.df() for r in reg_res if not r.df().empty]
+                if not reg_dfs:
+                    continue
+                reg_df = pd.concat(reg_dfs, axis=1)
+            except Exception as e:
+                print(f"Error processing regression data for {date_str}: {e}")
+                continue
+
+            # Process hybrid results with error handling
+            try:
+                hyb_dfs = [r.df() for r in hyb_res if not r.df().empty]
+                if not hyb_dfs:
+                    continue
+                hyb_df = pd.concat(hyb_dfs, axis=1)
+            except Exception as e:
+                print(f"Error processing hybrid data for {date_str}: {e}")
+                continue
+
+            # Calculate SSS for each bond
+            z_spread_perp_list = []
+            z_spread_senior_list = []
+            sss_list = []
+            bond_names = []
+
+            for j in range(len(results_hybrid)):
+                try:
+                    # Check if we have data for this bond
+                    if j >= len(hyb_df) or f"regression_{j}" not in reg_df.columns:
+                        continue
+
+                    # Get hybrid spread - try different column positions
+                    z_spread_perp = None
+                    for col_idx in [5, 4, 3, -1]:  # Try different positions for spread column, added 5
+                        try:
+                            if col_idx < hyb_df.shape[1]:
+                                z_spread_perp = pd.to_numeric(hyb_df.iloc[j, col_idx], errors='coerce')
+                                if pd.notna(z_spread_perp):
+                                    break
+                        except (IndexError, ValueError):
+                            continue
+
+                    # Get interpolated senior spread
+                    z_spread_senior = pd.to_numeric(reg_df[f"regression_{j}"].iloc[0], errors='coerce')
+
+                    # Only calculate SSS if both values are valid numbers
+                    if (pd.notna(z_spread_perp) and pd.notna(z_spread_senior) and
+                        isinstance(z_spread_perp, (int, float)) and isinstance(z_spread_senior, (int, float))):
+
+                        sss = float(z_spread_perp) - float(z_spread_senior)
+
+                        z_spread_perp_list.append(float(z_spread_perp))
+                        z_spread_senior_list.append(float(z_spread_senior))
+                        sss_list.append(sss)
+                        bond_names.append(str(results_hybrid["NAME"].iloc[j]))
+
+                except Exception as e:
+                    print(f"Error processing bond {j} on {date_str}: {e}")
+                    continue
+
+            # Only add data if we have valid calculations
+            if bond_names and len(bond_names) > 0:
+                df_day = pd.DataFrame({
+                    'bond_name': bond_names,
+                    'z-spread perp': z_spread_perp_list,
+                    'z-spread senior': z_spread_senior_list,
+                    'SSS': sss_list,
+                    'date': date_str
+                })
+                all_results.append(df_day)
+
+        except Exception as e:
+            print(f"Error processing {date_str}: {e}")
+            continue
+
+    if not all_results:
+        print("No valid data retrieved")
+        return pd.DataFrame(), results_hybrid
+
+    try:
+        # Combine and reshape data
+        combined_df = pd.concat(all_results, ignore_index=True)
+        combined_df = combined_df.drop_duplicates(subset=['date', 'bond_name'], keep='last')
+
+        # Reshape to time series format
+        final_df = combined_df.set_index(['date', 'bond_name']).unstack('bond_name')
+        final_df.columns = [f"{bond}_{metric}" for metric, bond in final_df.columns]
+
+        # Convert index to datetime
+        final_df.index = pd.to_datetime(final_df.index)
+
+        # Sort by date
+        final_df = final_df.sort_index()
+
+        # Clean outliers
+        final_df_clean, cleaning_report = clean_z_spreads_by_change(final_df, max_daily_change=500, max_fill_days=10)
+
+        # Calculate z-scores
+        final_df_clean = calculate_zscores(final_df_clean, zscore_rolling_days)
+
+        return final_df_clean, results_hybrid
+
+    except Exception as e:
+        print(f"Error in final data processing: {e}")
+        return pd.DataFrame(), results_hybrid
+def clean_z_spreads_by_change(df, max_daily_change=60, max_fill_days=10):
+    """Clean z-spread columns by replacing extreme daily changes."""
+    df_clean = df.copy()
+    z_spread_cols = [col for col in df_clean.columns]
+    cleaning_report = {}
+
+    for col in z_spread_cols:
+        daily_change = df_clean[col].diff().abs()
+        change_outliers = daily_change > max_daily_change
+        original_outliers = change_outliers.sum()
+
+        df_clean.loc[change_outliers, col] = np.nan
+        df_clean[col] = df_clean[col].fillna(method='ffill', limit=max_fill_days)
+
+        remaining_nan = df_clean[col].isna().sum()
+        cleaning_report[col] = {
+            'large_changes_found': original_outliers,
+            'changes_filled': original_outliers - remaining_nan,
+            'remaining_nan': remaining_nan
+        }
+
+    return df_clean, cleaning_report
+def calculate_zscores(df, zscore_rolling_days):
+    """Calculate rolling z-scores for SSS columns."""
+    sss_columns = [col for col in df.columns if col.endswith('_SSS')]
+
+    for sss_col in sss_columns:
+        z_col = sss_col.replace('_SSS', '_Z')
+        roll_mean = df[sss_col].rolling(zscore_rolling_days, min_periods=3).mean()
+        roll_std = df[sss_col].rolling(zscore_rolling_days, min_periods=3).std(ddof=0)
+
+        df[z_col] = (df[sss_col] - roll_mean) / roll_std.replace(0, np.nan)
+        df[z_col] = df[z_col].fillna(0)
+
+    return df
+def output_summary_table(df, ticker_name, bond_info):
+    """Output summary statistics for the bonds."""
+    if df.empty:
+        html = "<div style='color: white;'>No data available</div>"
+    else:
+        sss_columns = [col for col in df.columns if col.endswith('_SSS')]
+
+        if not sss_columns:
+            html = "<div style='color: white;'>No SSS data available</div>"
+        else:
+            summary_data = []
+
+            for sss_col in sss_columns:
+                bond_name = sss_col.replace('_SSS', '')
+                z_col = sss_col.replace('_SSS', '_Z')
+                latest_sss = df[sss_col].iloc[-1] if not df[sss_col].isna().all() else np.nan
+                latest_zscore = df[z_col].iloc[-1] if z_col in df.columns and not df[z_col].isna().all() else np.nan
+                mean_sss = df[sss_col].mean()
+                std_sss = df[sss_col].std()
+
+                # Find the corresponding bond info
+                bond_static_info = bond_info[bond_info['NAME'] == bond_name]
+
+                issue_date = 'N/A'
+                nextcall_date = 'N/A'
+
+                if not bond_static_info.empty:
+                    issue_date_val = bond_static_info['ISSUE DT'].iloc[0]
+                    nextcall_date_val = bond_static_info['NXT CALL DT'].iloc[0]
+
+                    if pd.notna(issue_date_val):
+                         issue_date = issue_date_val.strftime('%Y-%m-%d')
+                    if pd.notna(nextcall_date_val):
+                         nextcall_date = nextcall_date_val.strftime('%Y-%m-%d')
+
+
+                summary_data.append({
+                    'Bond': bond_name,
+                    'Issue Date': issue_date,
+                    'Next Call Date': nextcall_date,
+                    'Latest SSS': latest_sss,
+                    'Latest Z-Score': latest_zscore,
+                    'Mean SSS': mean_sss,
+                })
+
+            summary_df = pd.DataFrame(summary_data)
+
+            html = (
+                summary_df.style
+                .applymap(
+                    lambda v: (
+                        'color: red' if -10 < v < 0 else
+                        'color: lightgreen' if 10 > v > 0 else
+                        'color: lightblue'
+                    ),
+                    subset=['Latest SSS', 'Latest Z-Score', 'Mean SSS']
+                )
+                .applymap(
+                    lambda x: 'color: white',
+                    subset=['Bond']
+                )
+                .format({
+                    'Latest SSS': "{:.0f}",
+                    'Latest Z-Score': "{:.2f}",
+                    'Mean SSS': "{:.0f}",
+                })
+                .set_table_styles([
+                    {'selector': 'th', 'props': [('color', 'white'), ('background-color', '#404040')]},
+                    {'selector': 'td', 'props': [('background-color', '#505050')]}
+                ])
+                .hide_index()
+                .to_html()
+            )
+
+    summary_box.children = [widgets.HTML(html)]
+def plot_time_series(df, ticker_name):
+    """Create interactive time series plot of SSS and Z-scores using Plotly."""
+
+    with plot_output:
+        plot_output.clear_output(wait=True)
+        print("Updating chart...")
+
+        if df.empty:
+            print("No data to plot")
+            return
+
+        sss_columns = [col for col in df.columns if col.endswith('_SSS')]
+
+        if not sss_columns:
+            print("No SSS data to plot")
+            return
+
+        plot_output.clear_output(wait=True)
+
+        # Create subplots
+        fig = make_subplots(
+            rows=2, cols=1,
+            shared_xaxes=True,
+            subplot_titles=(f'{ticker_name} - Senior-Subordinated Spread (bps)', 'Rolling Z-Score'),
+            vertical_spacing=0.1,
+            row_heights=[0.7, 0.3]
+        )
+
+        colors = px.colors.qualitative.Set1
+
+        # Plot SSS
+        for i, sss_col in enumerate(sss_columns):
+            bond_name = sss_col.replace('_SSS', '')
+            color = colors[i % len(colors)]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=df.index,
+                    y=df[sss_col],
+                    name=f'{bond_name}',
+                    line=dict(color=color, width=1),
+                    mode='lines',
+                    hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>SSS: %{y:.0f} bps<extra></extra>'
+                ),
+                row=1, col=1
+            )
+
+            # Plot Z-scores
+            z_col = sss_col.replace('_SSS', '_Z')
+            if z_col in df.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=df.index,
+                        y=df[z_col],
+                        name=f'{bond_name} Z-Score',
+                        line=dict(color=color, width=1),
+                        mode='lines',
+                        hovertemplate='<b>%{fullData.name}</b><br>Date: %{x}<br>Z-Score: %{y:.2f}<extra></extra>',
+                        showlegend=False
+                    ),
+                    row=2, col=1
+                )
+
+        # Add gridlines for z-scores (2 and 4)
+        fig.add_hline(y=0, line_dash="dash", line_color="white", line_width=1, row=2, col=1)
+        fig.add_hline(y=2, line_dash="dot", line_color="orange", line_width=1, row=2, col=1)
+        fig.add_hline(y=-2, line_dash="dot", line_color="orange", line_width=1, row=2, col=1)
+        fig.add_hline(y=4, line_dash="dot", line_color="orange", line_width=1, row=2, col=1)
+        fig.add_hline(y=-4, line_dash="dot", line_color="orange", line_width=1, row=2, col=1)
+
+        # Update layout
+        fig.update_layout(
+            template='plotly_dark',
+            plot_bgcolor='rgb(33,33,33)',
+            paper_bgcolor='rgb(33,33,33)',
+            margin=dict(l=20, r=20, t=50, b=20),
+            hovermode="x unified",
+            hoverlabel=dict(bgcolor='rgba(88,88,88,0.7)'),
+            height=600,
+            legend=dict(
+                orientation="v",
+                yanchor="top",
+                y=1,
+                xanchor="left",
+                x=1.02
+            )
+        )
+
+        # Update axes
+        fig.update_xaxes(title_text="Date", row=2, col=1)
+        fig.update_yaxes(title_text="SSS (bps)", row=1, col=1)
+        fig.update_yaxes(title_text="Z-Score", row=2, col=1)
+
+        fig.show()
+def export_to_excel(df, ticker_name):
+    """Export dataframe to Excel and create download link"""
+
+    with download_output:
+        download_output.clear_output(wait=True)
+
+        # Create timestamp and filename
+        timestamp = pd.Timestamp.now(tz='Europe/Berlin')
+        date_today = timestamp.strftime('%Y-%m-%d_%H-%M-%S')
+        file_name = f'{ticker_name}_Hybrid_curve_spreads_{date_today}.xlsx'
+
+        # Export to Excel
+        df.to_excel(file_name, index=True)
+
+        def create_download_link(filename):
+            """Create a download link for a file"""
+            with open(filename, "rb") as f:
+                data = f.read()
+            b64 = base64.b64encode(data).decode()
+            href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="{os.path.basename(filename)}">Download {os.path.basename(filename)}</a>'
+            return href
+
+        # Display new download link
+        display(HTML(create_download_link(file_name)))
+def update_display(event=None):
+    """Updates the displayed data and plots when parameters change."""
+    # Get current values
+    ticker_name = ticker_dropdown.value
+    ticker_code = tickers_mapping.get(ticker_name, ticker_name)
+    lookback = lookback_dropdown.value
+    zscore_window = zscore_dropdown.value
+    regression_type = regression_dropdown.value
+
+    # Update display with filtered data
+    output_summary_table(current_data, ticker_name, bond_static_info_global) # Pass bond_info
+    plot_time_series(current_data, ticker_name)
+def run(event=None):
+    """Main function called when refresh button is clicked and by default when launching app."""
+    global current_data
+    global bond_static_info_global
+
+    # Reset the display
+    spinner.layout.visibility = 'visible'
+    summary_box.children = []
+    exception_label.value = ''
+
+    try:
+        # Get the selected options
+        ticker_name = ticker_dropdown.value
+        ticker_code = tickers_mapping.get(ticker_name, ticker_name)
+        lookback = lookback_dropdown.value
+        zscore_window = zscore_dropdown.value
+        regression_type = regression_dropdown.value
+
+        # Get historical data
+        df, bond_static_info_global = get_historical_data(
+            ticker_code,
+            lookback_days=lookback,
+            zscore_rolling_days=zscore_window,
+            regression_type=regression_type
+        )
+
+        current_data = df.copy()
+
+        # Update displays
+        output_summary_table(df, ticker_name, bond_static_info_global) # Pass bond_info
+        plot_time_series(df, ticker_name)
+
+        # Export to Excel
+        export_to_excel(df, ticker_name.replace(' ', '_')) #In app BBG program does not allow export to excel (In case of fix from BBG, can uncomment function call and widget call in run() function)
+
+    except Exception as e:
+        exception_label.value = f'Error: {e}'
+
+    finally:
+         spinner.layout.visibility = 'hidden'
+# Create input widgets
+style = {'description_width': 'initial'}
+
+# Ticker dropdown
+ticker_dropdown = widgets.Dropdown(
+    options=list(tickers_mapping.keys()),
+    value='ACCOR',
+    description='Equity:',
+    style=style,
+    layout={'width': '200px'}
+)
+
+# Lookback days dropdown
+lookback_dropdown = widgets.Dropdown(
+    options=[15, 30, 60, 90, 120, 180, 270, 360, 720],
+    value=15,
+    description='Lookback Days:',
+    style=style,
+    layout={'width': '150px'}
+)
+
+# Z-score rolling window dropdown
+zscore_dropdown = widgets.Dropdown(
+    options=[15, 30, 60, 90, 120, 180, 270, 360, 720],
+    value=15,
+    description='Z-Score Window:',
+    style=style,
+    layout={'width': '160px'}
+)
+
+# Regression type dropdown
+regression_dropdown = widgets.Dropdown(
+    options=[
+        ('Nelson-Siegel-Svensson', 'nelson_siegel_svenson'),
+        ('Nelson-Siegel', 'nelson_siegel'),
+        ('Linear', 'linear'),
+        ('Linear-Log', 'linear_log'),
+        ('Log-Log', 'log_log')
+    ],
+    value='nelson_siegel_svenson',
+    description='Regression:',
+    style=style,
+    layout={'width': '200px'}
+)
+
+# Widget to allow execution of procedure when clicked
+go_button = widgets.Button(
+    description='Refresh',
+    layout={'width': 'max-content', 'margin': '3px 0 0 4px'},
+    button_style='success'
+)
+
+# Loading widget
+spinner = widgets.HTML(
+    '''<i class="fa fa-spinner fa-spin" style="font-size: 18px"></i>''',
+    layout={'visibility': 'hidden', 'margin': '3px 0 0 10px'}
+)
+
+# Empty box to push any exception message into
+exception_label = widgets.Label(layout={'margin': '4px 0 0 -35px'})
+
+# Empty widgets to push data into
+summary_box = widgets.VBox()
+download_output = widgets.Output()
+plot_output = widgets.Output()
+
+# Register the listener to the button click
+go_button.on_click(run)
+
+# Initialize with default data
+current_data = pd.DataFrame()
+bond_static_info_global = pd.DataFrame()
+# Run all
+run()
+
+# Collect display widgets together
+ui_display = widgets.VBox(
+    [
+        widgets.HBox([go_button, ticker_dropdown, lookback_dropdown, zscore_dropdown, regression_dropdown, spinner, exception_label]),
+        widgets.HTML(
+            "<hr>",
+            layout={'width': '100%', 'margin': '-7px 0 5px 2px'}
+        ),
+        summary_box,
+        plot_output
+    ]
+)
+
+ui_display
+VBox(children=(HBox(children=(Button(button_style='success', description='Refresh', layout=Layout(margin='3px …
