@@ -1,0 +1,880 @@
+import numpy as np
+import pandas as pd
+import datetime
+import matplotlib.pyplot as plt
+import matplotlib.markers as mk
+import matplotlib.ticker as mtick
+import bql
+import ipydatagrid as ipd
+import ipywidgets as widgets
+import plotly.express as px
+import plotly.graph_objects as go
+from functools import partial
+from scipy import stats
+from IPython.display import HTML, display, clear_output
+import base64
+import os
+from IPython.display import display, FileLink
+
+bq = bql.Service()
+
+
+#Code by: Octave Suprano (octave.suprano@cic.fr)
+tickers_mapping = {
+# Suivi Trading ------------------------------------------    
+'ABERTIS': ("1670599D SM Equity", "Infrastructure"),
+'ACCOR': ("AC FP Equity", "Consumer Services"),
+'ALSTOM': ("ALO FP Equity", "Industrials"),
+'ARKEMA': ("AKE FP Equity", "Chemicals"),
+'BRITISH TEL': ("BT/A LN Equity", "Telecommunications"), #PLus d'hybrides EUR
+'BAYER': ("BAYN GR Equity", "Healthcare"),
+'BERTELSMANN': ("BTG GR Equity", "Consumer Services"),
+'DSM': ("DSM NA Equity", "Chemicals"),
+'DANONE': ("BN FP Equity", "Consumer Goods"),
+'DEUTSCHE BOERSE': ("DB1 GR Equity", "Financials"),
+'MERCK': ("MRK GR Equity", "Healthcare"),
+'EDP': ("EDP PL Equity", "Utilities"),
+'ELIA': ("ELI BB Equity", "Utilities"),
+'ENGIE': ("ENGI FP Equity", "Utilities"),
+'EUROCLEAR': ("1170Z BB Equity", "Financials"),
+'EUROFINS': ("ERF FP Equity", "Healthcare"),
+'EDF': ("EDF FP Equity", "Utilities"),
+'IBERDROLA': ("IBE SM Equity", "Utilities"),
+'INFINEON': ("IFX GR Equity", "Technology"),
+'LUFTHANSA': ("LHA GR Equity", "Consumer Services"),
+'PROXIMUS': ("PROX BB Equity", "Telecommunications"),
+'VATTENFALL': ("VATT SS Equity", "Utilities"),
+'KPN': ("KPN NA Equity", "Telecommunications"),
+'ORANGE': ("ORA FP Equity", "Telecommunications"),
+'EVONIK': ("EVK GR Equity", "Chemicals"),
+'RED ELECTRICA': ("RED SM Equity", "Utilities"),
+'ROQUETTE FRERES': ("211710Z FP Equity", "Consumer Goods"),
+'SYENSQO': ("SYENS BB Equity", "Chemicals"),
+'TELEFONICA': ("TEF SM Equity", "Telecommunications"),
+'TERNA': ("TRN IM Equity", "Utilities"),
+'UNIBAIL-RW': ("URW NA Equity", "Real Estate"),
+'VEOLIA': ("VIE FP Equity", "Utilities"),
+'VODAFONE': ("VOD LN Equity", "Telecommunications"),
+'VOLKSWAGEN': ("VOW GR Equity", "Consumer Goods"),
+
+# Ajouts ------------------------------------------    
+'TOTAL ENERGIES': ("TTE FP Equity", "Utilities"),
+'A2A': ('A2A IM Equity', 'Utilities'),
+'ADECCO': ('ADEC SW Equity', 'Consumer Services'),
+'AIR FRANCE-KLM': ('AF FP Equity', 'Consumer Services'),
+'AKELIUS': ('AKEL SS Equity', 'Real Estate'),
+'ALLIANDER': ('ALLIA NA Equity', 'Utilities'),
+'APA': ('APA AU Equity', 'Energy'),
+'AROUNDTOWN': ('AT1 GR Equity', 'Real Estate'),
+'AROUNDTOWN Finance': ('ATW GR Equity', 'Real Estate'),
+#'AT&S': ('ATS AV Equity', 'Technology'), # No EUR curve
+'AUSNET': ('AST AU Equity', 'Utilities'),
+'BERTELSMANN': ('BTG GR Equity', 'Consumer Services'),
+'BP': ('BP/ LN Equity', 'Energy'),
+'BRITISH AMERICAN TOBACCO': ('BATS LN Equity', 'Consumer Goods'),
+'CASTELLUM': ('CAST SS Equity', 'Real Estate'),
+'CITYCON': ('CITYA FH Equity', 'Real Estate'),
+'CLARIANE': ('CLARI FP Equity', 'Healthcare'),
+'CPI PROPERTY GROUP': ('CPI PR Equity', 'Real Estate'),
+'DEUTSCHE BAHN': ('DBN GR Equity', 'Industrials'),
+'EESTI ENERGIA': ('EEG1T EE Equity', 'Utilities'),
+'ENBW': ('EBK GR Equity', 'Utilities'),
+'ENEL': ('ENEL IM Equity', 'Utilities'),
+'ENI': ('ENI IM Equity', 'Energy'),
+'BALDER': ('BALDA SS Equity', 'Real Estate'),
+'G CITY': ('GCE GR Equity', 'Real Estate'),
+'GAZPROM': ('GAZPRM RU Equity', 'Energy'),
+'GRAND CITY PROPERTIES': ('GYC GR Equity', 'Real Estate'),
+'HEIMSTADEN': ('HEIM SS Equity', 'Real Estate'),
+'HEIMSTADEN BOSTAD': ('HEIMS SS Equity', 'Real Estate'),
+'IREN': ('IRE IM Equity', 'Utilities'),
+'JT INTERNATIONAL': ('JTI SW Equity', 'Consumer Goods'),
+'FRIESLANDCAMPINA': ('FCANG NA Equity', 'Consumer Goods'),
+'KPN': ('KPN NA Equity', 'Telecommunications'),
+'LA POSTE': ('LAPO FP Equity', 'Consumer Services'),
+#'LENZING': ('LNZ AV Equity', 'Chemicals'), # No EUR curve
+'MERCK': ('MRK GR Equity', 'Healthcare'),
+'NATURGY': ('NTGY SM Equity', 'Utilities'),
+'NGG': ('NG/ LN Equity', 'Utilities'),
+'OMV': ('OMV AV Equity', 'Energy'),
+'ORSTED': ('ORSTED DC Equity', 'Utilities'),
+'POSTE ITALIANE': ('PST IM Equity', 'Consumer Services'),
+'PRYSMIAN': ('PRY IM Equity', 'Industrials'),
+#'RAKUTEN': ('4755 JP Equity', 'Consumer Services'), # No EUR curve
+'REDEIA': ('RED SM Equity', 'Utilities'),
+'REPSOL': ('REP SM Equity', 'Energy'),
+'RWE': ('RWE GR Equity', 'Utilities'),
+'SECHE ENVIRONNEMENT': ('SCHP FP Equity', 'Utilities'),
+'SES': ('SESG FP Equity', 'Consumer Services'),
+'SNAM': ('SRG IM Equity', 'Utilities'),
+'SOUTHERN CO': ('SO US Equity', 'Utilities'),
+'SSE': ('SSE LN Equity', 'Utilities'),
+'STEDIN': ('STEDIN NA Equity', 'Utilities'),
+'SUDZUCKER': ('SUD GR Equity', 'Consumer Goods'),
+'TELIA': ('TELIA SS Equity', 'Telecommunications'),
+'TENNET': ('TENNET NA Equity', 'Utilities'),
+'TERNA': ('TRN IM Equity', 'Utilities'),
+'VANTIVA': ('VANT FP Equity', 'Consumer Services'),
+'VAR ENERGI': ('VARNER NO Equity', 'Energy'),
+'WINTERSHALL DEA': ('WINT GR Equity', 'Energy')
+}
+
+list_tickers = [
+"1670599D SM Equity",
+"AC FP Equity",
+"ALO FP Equity",
+"AKE FP Equity",
+"BT/A LN Equity",
+"BAYN GR Equity",
+"BTG GR Equity",
+"DSM NA Equity",
+"BN FP Equity",
+"DB1 GR Equity",
+"MRK GR Equity",
+"EDP PL Equity",
+"ELI BB Equity",
+"ENGI FP Equity",
+"1170Z BB Equity",
+"ERF FP Equity",
+"EDF FP Equity",
+"IBE SM Equity",
+"IFX GR Equity",
+"LHA GR Equity",
+"PROX BB Equity",
+"VATT SS Equity",
+"KPN NA Equity",
+"ORA FP Equity",
+"EVK GR Equity",
+"RED SM Equity",
+"211710Z FP Equity",
+"SYENS BB Equity",
+"TEF SM Equity",
+"TRN IM Equity",
+"URW NA Equity",
+"VIE FP Equity",
+"VOD LN Equity",
+"VOW GR Equity",
+"TTE FP Equity",
+"A2A IM Equity",
+"ADEC SW Equity",
+"AF FP Equity",
+"AKEL SS Equity",
+"ALLIA NA Equity",
+"APA AU Equity",
+"AT1 GR Equity",
+"ATW GR Equity",
+#"ATS AV Equity",
+"AST AU Equity",
+"BP/ LN Equity",
+"BATS LN Equity",
+"CAST SS Equity",
+"CITYA FH Equity",
+"CLARI FP Equity",
+"CPI PR Equity",
+"DBN GR Equity",
+"EEG1T EE Equity",
+"EBK GR Equity",
+"ENEL IM Equity",
+"ENI IM Equity",
+"BALDA SS Equity",
+"GCE GR Equity",
+"GAZPRM RU Equity",
+"GYC GR Equity",
+"HEIM SS Equity",
+"HEIMS SS Equity",
+"IRE IM Equity",
+"JTI SW Equity",
+"FCANG NA Equity",
+"LAPO FP Equity",
+#"LNZ AV Equity",
+"NTGY SM Equity",
+"NG/ LN Equity",
+"OMV AV Equity",
+"ORSTED DC Equity",
+"PST IM Equity",
+"PRY IM Equity",
+#"4755 JP Equity",
+"RCI FP Equity",
+"RED SM Equity",
+"REP SM Equity",
+"RWE GR Equity",
+"SCHP FP Equity",
+"SESG FP Equity",
+"SRG IM Equity",
+"SO US Equity",
+"SSE LN Equity",
+"STEDIN NA Equity",
+"SUD GR Equity",
+"TELIA SS Equity",
+"TENNET NA Equity",
+"VANT FP Equity",
+"VARNER NO Equity",
+"WINT GR Equity"
+]
+def get_data(list_tickers, regression_type_choose='nelson_siegel_svenson', Min_Amt_out_choose=200, Max_Amt_out_choose=3000, Min_Maturity_choose=0.5, Max_Maturity_choose=80):
+
+    """Retrieves data from BQL for the selected tickers."""
+
+    ticker_to_sector = {
+        bloomberg_ticker: sector
+        for _, (bloomberg_ticker, sector) in tickers_mapping.items()
+    }
+
+    zspread = bq.data.spread(spread_type='Z')
+    moody = bq.data.rating(rating_source='moody')
+
+    data_items = {
+        'Name' : bq.data.name(),
+        'Company Name': bq.data.long_comp_name(),
+        'Equity Ticker' : bq.data.cast_parent_equity_ticker(),
+        'Z-Spread': zspread,
+        'Moody Rating': moody['BASE_RATING'],
+        'mdy_rating_scale': moody['NORMALIZED_SCALE'],
+        'S&P Rating': bq.data.rating(rating_source='sp')['BASE_RATING'],
+        'Fitch Rating': bq.data.rating(rating_source='fitch')['BASE_RATING'],
+
+        'Amount Outstanding': bq.data.amt_outstanding(),
+        'Next Call Date' : bq.data.nxt_call_dt(),
+        'Δ Z-spread 1w': zspread - bq.data.spread(spread_type='Z', dates='-1w', fill='prev'),
+    }
+
+    # Build and execute the request
+    universe = (
+        bq.univ.bonds(list_tickers)
+        .filter(
+            (bq.data.crncy() == "eur")
+            .and_(bq.data.hybrid() == 'true')
+            .and_(bq.data.amt_outstanding()/1000000 > Min_Amt_out_choose)
+            .and_(bq.data.amt_outstanding()/1000000 < Max_Amt_out_choose)
+        )
+    )
+
+    request = bql.Request(universe, data_items)
+    response = bq.execute(request)
+
+    results_df = pd.concat(
+        [data_item.df()[data_item.name] for data_item in response],
+        axis=1
+    )
+
+
+    results_df['Next Call Date (years)'] = (results_df["Next Call Date"] - pd.Timestamp.today()).dt.days / 365.25
+    results_df['Amount Outstanding'] = (results_df['Amount Outstanding']/ 1000)
+
+    results_df['Sector'] = results_df['Equity Ticker'].map(ticker_to_sector).fillna('Unknown')
+
+    ###################################
+
+    # Group by equity ticker to reduce the number of bql regression requests
+    grouped = results_df.groupby('Equity Ticker')
+    all_regression_results = {}
+
+    for equity_ticker, group in grouped:
+        if pd.isna(equity_ticker):
+            continue
+
+        # One universe per equity ticker
+        issuer_universe = (
+            bq.univ.bonds([equity_ticker])
+            .filter(
+                (bq.data.crncy() == "eur")
+                .and_(bq.data.maturity_years() > Min_Maturity_choose)
+                .and_(bq.data.maturity_years() < Max_Maturity_choose)
+                .and_(bq.data.amt_outstanding()/1000000 > Min_Amt_out_choose)
+                .and_(bq.data.amt_outstanding()/1000000 < Max_Amt_out_choose)
+                .and_(bq.data.spread(spread_type='Z') > 0)
+            )
+        )
+
+        # Multiple regressions for different call dates of the same issuer
+        data_items_issuer = {}
+        idx_mapping = {}  # Map regression keys to original indices
+
+        for i, (original_idx, row) in enumerate(group.iterrows()):
+            call_date_years = row['Next Call Date (years)']
+            if not pd.isna(call_date_years):
+                regression_key = f"regression_{i}"  # Use simple counter
+                data_items_issuer[regression_key] = bq.data.regression(
+                    reg_by=bq.data.maturity_years().group(),
+                    reg_value=bq.data.spread(st='z').group(),
+                    regression_points=call_date_years,
+                    regression_type=regression_type_choose
+                )
+                idx_mapping[regression_key] = original_idx  # Map back to original index
+
+        if data_items_issuer:
+            try:
+                request = bql.Request(issuer_universe, data_items_issuer)
+                response = bq.execute(request)
+
+                # Store results using the mapping
+                for data_item in response:
+                    regression_key = data_item.name
+                    if regression_key in idx_mapping:
+                        df_result = data_item.df()
+                        if not df_result.empty:
+                            original_idx = idx_mapping[regression_key]
+                            all_regression_results[original_idx] = df_result[regression_key].iloc[0]
+
+            except Exception as e:
+                print(f"Error processing {equity_ticker}")
+
+    # Map results back to dataframe
+    results_df['Interpolated Senior Spread'] = results_df.index.map(all_regression_results)
+    results_df['Sub to Senior Spread'] = results_df['Z-Spread'] - results_df['Interpolated Senior Spread']
+
+
+    return results_df
+def fill_dropdowns(df):
+    """Fills dropdown widgets with the unique values from the returned BQL
+    hybrid bond data, now supporting multiple selections."""
+
+    # Extract year from Next Call Date and put in new column
+    df['Next Call Year'] = df['Next Call Date'].dt.year
+
+    # Iterate over the required dropdowns and corresponding columns/sort_bys
+    dropdown_info = [
+        (moody_dropdown, 'Moody Rating', 'mdy_rating_scale'),
+        (sp_dropdown, 'S&P Rating', 'S&P Rating'),
+        (fitch_dropdown, 'Fitch Rating', 'Fitch Rating'),
+        (company_dropdown, 'Company Name', 'Company Name'),
+        (sector_dropdown, 'Sector', 'Sector'),
+        (next_call_year_dropdown, 'Next Call Year', 'Next Call Year')
+    ]
+
+    for dropdown, col, sort_by in dropdown_info:
+        # Set the options for each dropdown
+        if col == 'Next Call Year':
+            # Filter out NaN values and convert to int for years
+            options = sorted([int(year) for year in df[col].dropna().unique()])
+        else:
+            options = list(df.sort_values(sort_by)[col].dropna().unique()) # Drop NA for options
+
+        # For SelectMultiple, the options list should not contain 'All'
+        dropdown.options = options
+        dropdown.value = [] # Set default to empty list for SelectMultiple
+def filter_df(df):
+    """Filters the DataFrame based on the set dropdown filters, now supporting
+    multiple selections."""
+
+    # Ensure Next Call Year column exists
+    if 'Next Call Year' not in df.columns:
+        df['Next Call Year'] = df['Next Call Date'].dt.year
+
+    # Iterate over the dropdowns and corresponding columns
+    dropdown_info = [
+        (moody_dropdown, 'Moody Rating'),
+        (sp_dropdown, 'S&P Rating'),
+        (fitch_dropdown, 'Fitch Rating'),
+        (company_dropdown, 'Company Name'),
+        (sector_dropdown, 'Sector'),
+        (next_call_year_dropdown, 'Next Call Year')
+    ]
+
+    filtered_df = df.copy() # Create a copy to filter
+
+    for dropdown, col in dropdown_info:
+        selected_values = dropdown.value
+
+        # If nothing is selected in a SelectMultiple dropdown, don't filter by this column
+        if selected_values:
+            if col == 'Next Call Year':
+                 # Ensure comparison with integer years
+                 filtered_df = filtered_df[filtered_df[col].isin([int(val) for val in selected_values])]
+            elif col in ['Moody Rating', 'S&P Rating']:
+                 # Handle potential NaN values in ratings during filtering
+                 filtered_df = filtered_df[filtered_df[col].isin(selected_values)]
+            else:
+                filtered_df = filtered_df[filtered_df[col].isin(selected_values)]
+
+
+    return filtered_df
+def output_df(df):
+    """Outputs the DataFrame with the hybrid bond data into an HTML
+    styled output."""
+
+    # Define columns to hide from display
+    columns_to_hide = ['Next Call Year', 'Equity Ticker', 'mdy_rating_scale', 'Next Call Date (years)', 'Sector']
+
+    if df.empty:
+        html = (
+            "<div style='color: white;'>"
+            "No hybrid bonds match your criteria"
+            "</div>"
+        )
+    else:
+        # Create a copy for display and drop the unwanted columns
+        display_df = df.drop(columns=columns_to_hide, errors='ignore')
+
+        html = (
+            display_df.style
+            .set_table_styles([
+                {'selector': 'th', 'props': [('color', 'white')]},
+                {'selector': 'td', 'props': [('color', 'white')]}
+            ])
+            .hide_index()
+            .format({
+                "Z-Spread": "{:.2f}",
+                "Δ Z-spread 1w": "{:.2f}",
+                "Amount Outstanding": "{:,.0f}",
+                "Interpolated Senior Spread": "{:.2f}",
+                "Next Call Date": lambda x: x.strftime('%d/%m/%Y') if pd.notna(x) else '',  # Format date to remove Hours, min and sec
+                "Sub to Senior Spread": "{:.2f}"
+              })
+            .to_html()
+        )
+    output_box.children = [widgets.HTML(html)]
+def output_summary(df):
+    """Outputs the summary DataFrame with SSS statistics of filtered hybrid bonds."""
+    if df.empty:
+        html = (
+            "<div style='color: white;'>"
+            "No hybrid bonds match your criteria"
+            "</div>"
+        )
+    else:
+        # Check if SSS column exists and has data
+        if 'Sub to Senior Spread' not in df.columns or df['Sub to Senior Spread'].isna().all():
+            html = (
+                "<div style='color: white;'>"
+                "SSS data not available for the selected bonds"
+                "</div>"
+            )
+        else:
+            # Filter out NaN values for SSS calculations
+            sss_data = df['Sub to Senior Spread'].dropna()
+
+            if len(sss_data) == 0:
+                html = (
+                    "<div style='color: white;'>"
+                    "No valid SSS data for the selected bonds"
+                    "</div>"
+                )
+            else:
+                # Create summary dataframe with SSS statistics
+                summary_data = {
+                    'Count': [len(sss_data)],
+                    'SSS Mean': [sss_data.mean()],
+                    'SSS Median': [sss_data.median()],
+                    'SSS Std Dev': [sss_data.std()],
+                    'SSS Min': [sss_data.min()],
+                    'SSS Max': [sss_data.max()],
+                }
+
+                summary_df = pd.DataFrame(summary_data)
+
+                html = (
+                    summary_df.style
+                    .applymap(
+                        lambda v: (
+                            'color: lightgreen' if v > 0 else
+                            'color: red' if v < 0 else
+                            'color: lightblue'
+                        ),
+                        subset=['SSS Mean', 'SSS Median', 'SSS Min', 'SSS Max']
+                    )
+                    .applymap(
+                        lambda x: 'color: orange',
+                        subset=['SSS Std Dev']
+                    )
+                    .applymap(
+                        lambda x: 'color: white',
+                        subset=['Count']
+                    )
+                    .format({
+                        'Count': "{:.0f}",
+                        'SSS Mean': "{:.2f}",
+                        'SSS Median': "{:.2f}",
+                        'SSS Std Dev': "{:.2f}",
+                        'SSS Min': "{:.2f}",
+                        'SSS Max': "{:.2f}",
+
+                    })
+                    .set_table_styles([
+                        {
+                            'selector': 'th',
+                            'props': [
+                                ('color', 'white'),
+                                ('font-size', '11pt'),
+                                ('background-color', '#404040'),
+                                ('text-align', 'center')
+                            ]
+                        },
+                        {
+                            'selector': 'td',
+                            'props': [
+                                ('font-size', '11pt'),
+                                ('text-align', 'center'),
+                                ('background-color', '#505050')
+                            ]
+                        }
+                    ])
+                    .hide_index()
+                    .to_html()
+                )
+
+    summary_box.children = [widgets.HTML(html)]
+def plot_sss_distribution_plotly(df):
+    """Create an interactive histogram+KDE of the `Sub to Senior Spread` and display it."""
+
+    # Check if the required column exists
+    if 'Sub to Senior Spread' not in df.columns:
+        print("DataFrame does not contain a column named 'Sub to Senior Spread'")
+        return
+
+    # Filter NaNs
+    sss_data = df['Sub to Senior Spread'].dropna()
+
+    # Check if we have data to plot
+    if len(sss_data) == 0:
+        print("No valid data to plot")
+        return
+
+    # Create the plot
+    fig = px.histogram(
+        df.dropna(subset=['Sub to Senior Spread']),
+        x="Sub to Senior Spread",
+        nbins=min(70, len(sss_data)//2) if len(sss_data) > 10 else 10,
+        histnorm="density",
+        opacity=0.75,
+        marginal="violin",
+        labels={"Sub to Senior Spread": "Sub to Senior Spread", "density": "Density"},
+        color_discrete_sequence=["#FB8B1E"],
+    )
+
+    # Calculate statistics (Mean and Standard Deviation)
+    mean_val = sss_data.mean()
+    std_val = sss_data.std()
+
+    # Add mean line
+    fig.add_vline(
+        x=mean_val,
+        line_dash="dash",
+        line_color="white",
+        line_width=0.5,
+        annotation_text=f"Mean: {mean_val:.0f}",
+        annotation_position="top",
+        row=1, col=1  # Specify main plot only
+    )
+
+    # Add standard deviation lines
+    std_lines = [
+        (-3, "red", "dash", f"-3σ: {mean_val - 3*std_val:.0f}"),
+        (-2, "red", "dash", f"-2σ: {mean_val - 2*std_val:.0f}"),
+        (-1, "red", "dash", f"-1σ: {mean_val - 1*std_val:.0f}"),
+        (1, "red", "dash", f"+1σ: {mean_val + 1*std_val:.0f}"),
+        (2, "red", "dash", f"+2σ: {mean_val + 2*std_val:.0f}"),
+        (3, "red", "dash", f"+3σ: {mean_val + 3*std_val:.0f}")
+    ]
+
+    for std_mult, color, dash_style, label in std_lines:
+        x_pos = mean_val + std_mult * std_val
+        fig.add_vline(
+            x=x_pos,
+            line_dash=dash_style,
+            line_color=color,
+            line_width=0.5,
+            annotation_text=label,
+            row=1, col=1  # Specify main plot only
+        )
+
+    fig.update_layout(
+        template='plotly_dark',
+        plot_bgcolor='rgb(33,33,33)',
+        paper_bgcolor='rgb(33,33,33)',
+        margin=dict(l=20, r=20, t=50, b=20),
+        hovermode="x unified",
+        hoverlabel=dict(bgcolor='rgba(88,88,88,0.7)'),
+        height=400,
+        showlegend=False
+    )
+
+    # Display the figure within the plot_output widget
+    with plot_output:
+        clear_output(wait=True)
+        display(fig)
+def detach_handlers(widgets):
+    """Detaches listeners from each of the dropdown widgets."""
+    for widget in widgets:
+        widget.unobserve(None, 'value')
+
+def attach_handlers(widgets, df):
+    """Attaches listeners to each of the dropdown widgets, passing in the
+    hybrid bond DataFrame."""
+    for widget in widgets:
+        widget.observe(partial(update_display, df), 'value')
+def update_display(df, event=None):
+    """Updates the displayed DataFrames with new and filtered data."""
+    # Apply filters based on the dropdown widgets
+    filtered_df = filter_df(df) # Use the updated filter_df
+
+    # Output the member data
+    output_df(filtered_df) # Pass the filtered df
+
+    # Output the summary
+    output_summary(filtered_df) # Pass the filtered df
+
+    # Update the plot with filtered data
+    plot_sss_distribution_plotly(filtered_df) # Pass the filtered df
+def run(event=None):
+    """Main function called when refresh button is clicked."""
+    global original_data # Keep original_data for potential re-filtering
+
+    # Reset the display
+    spinner.layout.visibility = 'visible'
+    summary_heading.layout.visibility = 'hidden'
+    output_heading.layout.visibility = 'hidden'
+    output_box.children = []
+    summary_box.children = []
+    exception_label.value = ''
+    # Clear the plot output as well
+    with plot_output:
+        clear_output(wait=True)
+
+
+    try:
+        # Get the selected options and cutoff values
+        regression_type_choose = regression_dropdown.value
+        Min_Amt_out_choose = Min_Amt_out_dropdown.value
+        Max_Amt_out_choose = Max_Amt_out_dropdown.value
+        Min_Maturity_choose = Min_Maturity_dropdown.value
+        Max_Maturity_choose = Max_Maturity_dropdown.value
+
+        # Pass all parameters to get_data
+        df = get_data(list_tickers, regression_type_choose, Min_Amt_out_choose, Max_Amt_out_choose, Min_Maturity_choose, Max_Maturity_choose)
+
+        original_data = df.copy()
+
+        widgets = [
+            moody_dropdown, sp_dropdown, fitch_dropdown, company_dropdown, sector_dropdown, next_call_year_dropdown
+        ]
+
+        detach_handlers(widgets)
+        fill_dropdowns(df)
+        # CHANGE: Initialize SelectMultiple widgets with empty list
+        for widget in widgets:
+            widget.value = []
+        update_display(df)
+        attach_handlers(widgets, df)
+
+        summary_heading.layout.visibility = 'visible'
+        output_heading.layout.visibility = 'visible'
+
+        # CHANGE: Pass the filtered df to export_to_excel
+        export_to_excel(df) #In app BBG program does not allow export to excel (In case of fix from BBG, can uncomment function call)
+
+
+    except Exception as e:
+        exception_label.value = f'Error: {e}'
+
+    finally:
+         spinner.layout.visibility = 'hidden'
+# Create input widgets
+style = {'description_width': 'initial'}
+
+# This widget will have its options filled once member data is returned
+# CHANGE: Use SelectMultiple instead of Dropdown
+moody_dropdown = widgets.SelectMultiple(
+    description="Moody's Rating:",
+    style=style,
+    layout={'width': '170px'}
+)
+# This widget will have its options filled once member data is returned
+# CHANGE: Use SelectMultiple instead of Dropdown
+sp_dropdown = widgets.SelectMultiple(
+    description="S&P's Rating:",
+    style=style,
+    layout={'width': 'max-content'}
+)
+# This widget will have its options filled once member data is returned
+# CHANGE: Use SelectMultiple instead of Dropdown
+fitch_dropdown = widgets.SelectMultiple(
+    description="Fitch's Rating:",
+    style=style,
+    layout={'width': 'max-content'}
+)
+# This widget will have its options filled once member data is returned
+# CHANGE: Use SelectMultiple instead of Dropdown
+company_dropdown = widgets.SelectMultiple(
+    description="Equity Name:",
+    style=style,
+    layout={'width': '210px'}
+)
+# This widget will have its options filled once member data is returned
+# CHANGE: Use SelectMultiple instead of Dropdown
+next_call_year_dropdown = widgets.SelectMultiple(
+    description="Next Call Date",
+    style=style,
+    layout={'width': '170px'}
+)
+# This widget will have its options filled once member data is returned
+# CHANGE: Use SelectMultiple instead of Dropdown
+sector_dropdown = widgets.SelectMultiple(
+    description="Sector",
+    style=style,
+    layout={'width': '170px'}
+)
+
+top_text = widgets.BoundedIntText(
+    value=20,
+    min=0,
+    continuous_update=True,
+    layout={'width': '60px'}
+)
+
+regression_dropdown = widgets.Dropdown(
+    options=[
+        ('Nelson-Siegel-Svensson', 'nelson_siegel_svenson'),
+        ('Nelson-Siegel', 'nelson_siegel'),
+        ('Linear', 'linear'),
+        ('Linear-Log', 'linear_log'),
+        ('Log-Log', 'log_log')
+    ],
+    value='nelson_siegel_svenson',  # Default value
+    description='Regression:',
+    style={'description_width': 'initial'},
+    layout={'width': '200px', 'margin': '3px 0 0 10px'}
+)
+
+Min_Amt_out_dropdown = widgets.BoundedFloatText(
+    value=200,
+    min=0,
+    max=1500,
+    step=50,
+    description='Amt Out (M) - MIN',
+    style={'description_width': 'initial'},
+    layout={'width': '180px', 'margin': '3px 0 0 5px'},
+    continuous_update=False
+)
+
+Max_Amt_out_dropdown = widgets.BoundedFloatText(
+    value=3000,
+    min=100,
+    max=4000,
+    step=250,
+    description='MAX',
+    style={'description_width': 'initial'},
+    layout={'width': '90px', 'margin': '3px 5px 0 5px'},
+    continuous_update=False
+)
+
+# Maturity cutoff input box (min boundary)
+Min_Maturity_dropdown = widgets.BoundedFloatText(
+    value=0.5,
+    min=0,
+    max=15,
+    step=0.5,
+    description='Mat (Y) - MIN',
+    style={'description_width': 'initial'},
+    layout={'width': '130px', 'margin': '3px 0 0 5px'},
+    continuous_update=False
+)
+
+# Maturity cutoff input box (min boundary)
+Max_Maturity_dropdown = widgets.BoundedFloatText(
+    value=80,
+    min=10,
+    max=100,
+    step=1,
+    description='MAX',
+    style={'description_width': 'initial'},
+    layout={'width': '90px', 'margin': '3px 30px 0 5px'},
+    continuous_update=False
+)
+
+
+# Empty widgets to push summary and security drilldown data into
+output_box = widgets.VBox(layout={'height': '600px'})
+summary_box = widgets.VBox()
+download_box = widgets.VBox()
+
+# Removed output widgets
+# download_output = widgets.Output()
+# sss_plot_output = widgets.Output()
+
+# Add a dedicated Output widget for the plot
+plot_output = widgets.Output()
+
+# Heading widgets, initially hidden
+layout = {'visibility': 'hidden', 'margin': '10px 0 10px 0'}
+summary_heading = widgets.Label('Filtered Summary', layout=layout)
+output_heading = widgets.Label('Filtered Securities', layout=layout)
+# Widget to allow execution of procedure when clicked
+go_button = widgets.Button(
+    description='Refresh',
+    layout={'width': 'max-content', 'margin': '3px 0 0 4px'},
+    button_style='success'
+)
+
+# Loading widget
+spinner = widgets.HTML(
+    '''''',
+    layout={'visibility': 'hidden', 'margin': '3px 0 0 10px'}
+)
+# Empty box to push any exception message into
+exception_label = widgets.Label(layout={'margin': '4px 0 0 -35px'})
+# Register the listener to the button click
+go_button.on_click(run)
+# Widget to allow execution of procedure when clicked
+go_button = widgets.Button(
+    description='Refresh',
+    layout={'width': 'max-content', 'margin': '3px 0 0 4px'},
+    button_style='success'
+)
+
+# Loading widget
+spinner = widgets.HTML(
+    '''<i class="fa fa-spinner fa-spin" style="font-size: 18px"></i>''',
+    layout={'visibility': 'hidden', 'margin': '3px 0 0 10px'}
+)
+# Empty box to push any exception message into
+exception_label = widgets.Label(layout={'margin': '4px 0 0 -35px'})
+# Register the listener to the button click
+go_button.on_click(run)
+def export_to_excel(df):
+    """Export dataframe to Excel and create download link"""
+
+    # Remove with statement and clear_output
+    # with download_output:
+    #     clear_output(wait=True)
+
+    # Create timestamp and filename
+    timestamp = pd.Timestamp.now(tz='Europe/Berlin')
+    date_today = timestamp.strftime('%Y-%m-%d_%H-%M-%S')
+    file_name = f'Hybrids_Monitor_{date_today}.xlsx'
+
+    # Export to Excel
+    # CHANGE: Use the filtered df, not original_data
+    df.to_excel(file_name, index=True)
+
+    def create_download_link(filename):
+        """Create a download link for a file"""
+        with open(filename, "rb") as f:
+            data = f.read()
+        b64 = base64.b64encode(data).decode()
+        # CHANGE: Use the original file name for download
+        href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="{os.path.basename(filename)}"> Download {os.path.basename(filename)}</a>'
+        return href
+
+    # Display new download link directly
+    display(HTML(create_download_link(file_name)))
+run()
+
+# Collect display widgets
+ui_display = widgets.VBox(
+    [
+        widgets.HBox([go_button, regression_dropdown, Min_Maturity_dropdown, Max_Maturity_dropdown, Min_Amt_out_dropdown, Max_Amt_out_dropdown, spinner, exception_label]),
+        widgets.HTML(
+            "<hr>",
+            layout={'width': '720px', 'margin': '-7px 0 5px 2px'}
+        ),
+        widgets.HBox([moody_dropdown, sp_dropdown, fitch_dropdown, company_dropdown, sector_dropdown, next_call_year_dropdown]),
+        summary_box,
+        plot_output, # Add the dedicated plot_output widget
+        output_box
+    ]
+)
+
+ui_display
+Download Hybrids_Monitor_2025-10-06_10-32-15.xlsx
+VBox(children=(HBox(children=(Button(button_style='success', description='Refresh', layout=Layout(margin='3px …
