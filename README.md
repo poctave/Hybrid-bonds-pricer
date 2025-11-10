@@ -41,12 +41,10 @@ plot_time_series plots SSS and Zscore on a plotly graph (interactive), both comp
 
 export_to_excel creates an output (download_output) with an HTML download link with title set as name of the ticker selected an timestamp.
 
-# In app BQuant elements don’t allow the download of files directly in Bloomberg, this function is therefore useless for now and not called in run and the download_output is not shown. For some reason that I cant explain now, the removal of this function creates another bug where the in app element is stuck at execution of last step, this is due to Bloomberg’s BQuant usage of Voila library and this bug is currently being investigated on their side.
+In app BQuant elements don’t allow the download of files directly in Bloomberg, this function is therefore useless for now and not called in run and the download_output is not shown. For some reason that I cant explain now, the removal of this function creates another bug where the in app element is stuck at execution of last step, this is due to Bloomberg’s BQuant usage of Voila library and this bug is currently being investigated on their side.
 
-update_display associates values given by dropdowns to variables, then run output_summary_table and plot_time_series
-# this function is not used in the version of this code, as there is no automatic refresh with observers on change in dropdown values. A simple update of the function will be necessary if we want to implement auto-update
+update_display associates values given by dropdowns to variables, then run output_summary_table and plot_time_series this function is not used in the version of this code, as there is no automatic refresh with observers on change in dropdown values. A simple update of the function will be necessary if we want to implement auto-update
 
 run access current_data and bond_static_info_global, variables that are made global (still empty at this time) and populates them with data using variables given by dropdowns values and get_historical_data. A spinner widget is present during the running time of the function.
 
 Widgets are created with minimum and maximum values
-
