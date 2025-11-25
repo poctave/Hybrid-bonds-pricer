@@ -1,0 +1,176 @@
+# This script gives a single snapshot of Sub-Senior spread for one Hybrid bond, but computes the NSS regression itself (and does not pull it from bloomberg), plots it with matplotlib
+
+import numpy as np
+import pandas as pd
+from scipy.optimize import curve_fit
+from datetime import date, timedelta
+
+import matplotlib.pyplot as plt
+import matplotlib.markers as mk
+import matplotlib.ticker as mtick
+
+import bql
+
+bq = bql.Service()
+
+
+input_user = """FR001400ZZD7
+"""
+input_user_evolution = 30
+
+input_user = input_user.splitlines()
+input_user = [isin + " CORP" for isin in input_user]
+
+input_user_evolution_date = date.today() - timedelta(days = input_user_evolution)
+input_user_evolution_date = input_user_evolution_date.strftime("%Y-%m-%d")
+
+universe = input_user
+fields = [bq.data.name(), 
+          bq.data.nxt_call_dt(), 
+          bq.data.spread(spread_type='Z'),
+          bq.data.spread(spread_type='Z', dates= input_user_evolution_date, fill='PREV'),
+          bq.data.spread(spread_type='ASW'),
+          bq.data.spread(spread_type='ASW', dates= input_user_evolution_date, fill='PREV'),
+          bq.data.issuer(),
+          bq.data.cast_parent_equity_ticker()
+          
+] 
+request = bql.Request(universe, fields)
+response = bq.execute(request)
+results_df = [resp.df() for resp in response]
+results_df = pd.concat(results_df,axis=1)
+results_df
+
+results_df.columns = ["NAME","NXT CALL DT","DATE-Z","Z-SPREAD","DATE-ZL","Z-SPREAD LOOKBACK","DATE-ASW","ASW-SPREAD","DATE-ASWL","ASW-SPREAD LOOKBACK","ISSUER TICKER","ISSUER"]
+
+get_hybrids_res = pd.DataFrame()
+get_hybrids_res["NAME"] = results_df["NAME"]
+get_hybrids_res["NXT_CALL_DT"] = results_df["NXT CALL DT"]
+get_hybrids_res["Z-SPREAD"] = results_df["Z-SPREAD"].astype(int)
+get_hybrids_res["Z-SPREAD-lookback"] = results_df["Z-SPREAD LOOKBACK"].astype(int)
+get_hybrids_res["Z-CHANGE"] = get_hybrids_res["Z-SPREAD-lookback"] - get_hybrids_res["Z-SPREAD"] 
+get_hybrids_res["ASW-SPREAD"] = results_df["ASW-SPREAD"].astype(int)
+get_hybrids_res["ASW-SPREAD-lookback"] = results_df["ASW-SPREAD LOOKBACK"].astype(int)
+get_hybrids_res["ASW-CHANGE"] = get_hybrids_res["ASW-SPREAD-lookback"] - get_hybrids_res["ASW-SPREAD"] 
+
+get_hybrids_res
+NAME	NXT_CALL_DT	Z-SPREAD	Z-SPREAD-lookback	Z-CHANGE	ASW-SPREAD	ASW-SPREAD-lookback	ASW-CHANGE
+ID								
+FR001400ZZD7 Corp	AKEFP 4 ¼ PERP	2030-05-27	213	198	-15	207	193	-14
+issuer = results_df["ISSUER"].iloc[0] 
+bond_name = results_df["NAME"].iloc[0]
+
+perp_zspread = results_df["Z-SPREAD"].iloc[0]
+
+perp_nxt_call_dt = results_df["NXT CALL DT"].iloc[0]
+perp_nxt_call_dt = ((perp_nxt_call_dt - pd.Timestamp.today()).days)/365.25
+target_nxt_call_dt = perp_nxt_call_dt
+
+universe_2 = (
+    bq.univ.bonds(issuer)
+    .filter(
+        (bq.data.crncy() == "EUR")
+        .and_(bq.data.maturity() < '30Y')
+        .and_(bq.data.amt_outstanding() >  '300M')
+    )
+)
+
+fields_2 = [bq.data.spread(spread_type='Z'), bq.data.maturity()]
+
+request_2 = bql.Request(universe_2, fields_2)
+response_2 = bq.execute(request_2)
+results_df = [resp.df() for resp in response_2]
+
+issuer_bonds = pd.DataFrame()
+issuer_bonds["Z-SPREAD"] = results_df[0]["SPREAD(spread_type='Z')"]
+issuer_bonds["MATURITY"] = results_df[1]["MATURITY()"]
+issuer_bonds["MATURITY"] = ((issuer_bonds["MATURITY"] - pd.Timestamp.today()).dt.days)/365.25
+issuer_bonds = issuer_bonds.set_index('MATURITY')
+issuer_curve = issuer_bonds.copy()
+issuer_curve = issuer_curve.dropna()
+issuer_curve = issuer_curve[issuer_curve.index < 20] 
+
+def NSS(x, β0, β1, β2, β3, λ0, λ1):
+    term1 = (1 - np.exp(-x / λ0)) / (x / λ0)
+    term2 = term1 - np.exp(-x / λ0)
+    term3 = (1 - np.exp(-x / λ1)) / (x / λ1) - np.exp(-x / λ1)
+    return β0 + β1 * term1 + β2 * term2 + β3 * term3
+
+p0 = [0.05, 0.05, 0.05, 0.05, 1.0, 1.0]
+
+params, covariance = curve_fit(NSS, issuer_curve.index, issuer_curve["Z-SPREAD"], p0=p0, maxfev=5000)
+β0, β1, β2, β3, λ0, λ1 = params
+
+def NSS_fitted(x):
+    return NSS(x, β0, β1, β2, β3, λ0, λ1)
+x_smooth = np.linspace(min(issuer_curve.index), max(issuer_curve.index)+0.1, 200)
+y_smooth = NSS_fitted(x_smooth)
+
+spread_ncd = NSS_fitted(target_nxt_call_dt)
+perp_senior_spread = perp_zspread - spread_ncd
+
+
+plt.figure(figsize=(10,6))
+plt.scatter(issuer_curve.index, issuer_curve["Z-SPREAD"], label='Issuer bonds', s= 10)
+plt.plot(x_smooth, y_smooth, color='red', label='NSS Fitted', linewidth=0.7 )
+
+plt.scatter(target_nxt_call_dt, spread_ncd, label= 'interpolated senior spread', marker = 's', s= 70, color = 'k')
+plt.scatter(target_nxt_call_dt, perp_zspread, label= 'perp mid z-spread', marker = '8', s= 70, color = 'k')
+
+plt.xlabel('Maturity (years)')
+plt.ylabel('Z-Spread (bps)')
+plt.title(f'Issuer curve of {issuer} - NSS regression')
+
+plt.annotate(f"Z-Spread: {spread_ncd:.0f} bps", (target_nxt_call_dt, spread_ncd), textcoords="offset points", xytext=(10, -10), fontsize=8, color='black')
+plt.annotate(f"{bond_name} mid Z-Spread: {perp_zspread:.0f} bps", (target_nxt_call_dt, perp_zspread), textcoords="offset points", xytext=(10,-10), fontsize=8, color='black')
+
+plt.legend()
+plt.grid(True, alpha=0.4)
+plt.show()
+/tmp/ipykernel_71/3499582644.py:35: OptimizeWarning: Covariance of the parameters could not be estimated
+  params, covariance = curve_fit(NSS, issuer_curve.index, issuer_curve["Z-SPREAD"], p0=p0, maxfev=5000)
+
+# Historicals
+    
+fields_hist = [
+    bq.data.spread(spread_type='Z', dates=bq.func.range(f'-{input_user_evolution}D', '0D'), fill='prev'), 
+    bq.data.spread(spread_type='ASW', dates=bq.func.range(f'-{input_user_evolution}D', '0D'), fill='prev') 
+]
+
+
+bq.data.spread(spread_type='Z', dates= input_user_evolution_date),
+    
+
+request_hist = bql.Request(universe, fields_hist)
+response_hist = bq.execute(request_hist)
+results_df_hist = pd.DataFrame()
+#results_df_hist = response_hist[0].df().set_index("DATE")
+results_df_hist = [resp.df().set_index("DATE") for resp in response_hist]
+results_df_hist = pd.concat(results_df_hist,axis=1)
+results_df_hist.columns = ["Z","ASW"]
+results_df_hist
+
+fig, ax1 = plt.subplots(figsize=(10, 6))
+
+ax1.plot(results_df_hist.index, results_df_hist["Z"], color='red', label='Z-Spread', linewidth=0.7)
+ax1.plot(results_df_hist.index, results_df_hist["ASW"], color='blue', label='ASW-Spread', linewidth=0.7)
+
+ax1.set_xlabel('Index')
+ax1.set_ylabel('Spread')
+ax1.tick_params(axis='y')
+ax1.legend(loc='upper left')
+
+ax2 = ax1.twinx()
+ax2.set_ylabel('ASW Spread')
+ax2.tick_params(axis='y')
+ax2.legend(loc='upper right')
+
+ax2.set_ylim(-max(abs(results_df_hist["ASW"]-results_df_hist["Z"])*2), max(abs(results_df_hist["ASW"]-results_df_hist["Z"])*2))
+ax2.plot(results_df_hist.index, results_df_hist["ASW"] - results_df_hist["Z"], color='green', label='ASW-Z', linewidth=0.1)
+
+plt.fill_between(results_df_hist.index, results_df_hist["ASW"] - results_df_hist["Z"], color= 'green', alpha=0.1)
+plt.xlabel('Maturity (date)')
+plt.ylabel('Ecart')
+plt.title(f'Spread for {issuer}')
+plt.legend()
+plt.show()
