@@ -1,0 +1,302 @@
+# This script has the same concept as issuer cruve historicals but does it by looping the regression instead of using bq.execute_many
+
+import numpy as np
+import pandas as pd
+from datetime import date, timedelta
+import matplotlib.pyplot as plt
+import matplotlib.markers as mk
+import matplotlib.ticker as mtick
+
+import bql
+
+bq = bql.Service()
+# list of dates going back x days from today
+lookback_days = 175
+zscore_rolling_days = 60
+input_user = """AKE FP Equity"""
+
+end_date = pd.Timestamp.today()
+start_date = end_date - pd.Timedelta(days=lookback_days)
+date_list = pd.date_range(start=start_date, end=end_date)
+univ2 = (
+    bq.univ.bonds(input_user)
+    .filter(
+        (bq.data.crncy() == "eur")
+        .and_(bq.data.hybrid() == 'true')
+        .and_(bq.data.amt_outstanding() > '200m')
+    )
+)
+
+fields2 = [bq.data.name(), 
+          bq.data.nxt_call_dt(), 
+          bq.data.cast_parent_equity_ticker(),
+           bq.data.spread(spread_type ='Z')
+         ] 
+request2 = bql.Request(univ2, fields2)
+response = bq.execute(request2)
+
+results_df2 = [resp.df() for resp in response]
+results_df2 = pd.concat(results_df2, axis=1)
+results_df2.columns = ["NAME","NXT CALL DT","ISSUER","Z-SPREAD Date", "Z-Spread"]
+
+results_df2["NXT CALL DT (Year)"] = (results_df2["NXT CALL DT"] - pd.Timestamp.today()).dt.days / 365.25
+univ1 = (
+    bq.univ.bonds(input_user)
+    .filter(
+        (bq.data.crncy() == "eur")
+        .and_(bq.data.maturity() < '30y')
+        .and_(bq.data.amt_outstanding() > '250m')
+    )
+)
+
+fields1 = {}
+for i, tenor in enumerate(results_df2["NXT CALL DT (Year)"]):
+    fields1[f"regression_{i}"] = bq.data.regression(
+        reg_by=bq.data.maturity_years().group(),
+        reg_value=bq.data.spread(st='z').group(),
+        regression_points=tenor,
+        regression_type='nelson_siegel_svenson'
+    )
+def get_data_for_date(date_str):
+
+    req1 = bql.Request(univ1, fields1, with_params={'dates': date_str, 'fill':'prev'})   #can add 'fill':'prev' to avoid errors on weekend-days
+    res1 = bq.execute(req1)
+    df_reg1 = pd.concat([r1.df() for r1 in res1], axis=1)
+    
+    req2 = bql.Request(univ2, fields2, with_params={'dates': date_str, 'fill':'prev'})   #can add 'fill':'prev' to avoid errors on weekend-days
+    res2 = bq.execute(req2)
+    df_reg2 = pd.concat([r2.df() for r2 in res2], axis=1)
+    
+    df_final = pd.DataFrame({
+        'z-spread perp': int(df_reg2["SPREAD(spread_type='Z')"].iloc[0]),
+        'z-spread senior': int(df_reg1["nxt_call_dt"].iloc[0]),
+        'SSS': int(df_reg2["SPREAD(spread_type='Z')"].iloc[0] - df_reg1["nxt_call_dt"].iloc[0]),
+    }, index=[date_str])
+    
+    return df_final
+def get_data_for_date(date_str):
+
+    req1 = bql.Request(univ1, fields1, with_params={'dates': date_str, 'fill':'prev'})
+    res1 = bq.execute(req1)
+    df_reg1 = pd.concat([r1.df() for r1 in res1], axis=1)
+    
+    req2 = bql.Request(univ2, fields2, with_params={'dates': date_str, 'fill':'prev'})
+    res2 = bq.execute(req2)
+    df_reg2 = pd.concat([r2.df() for r2 in res2], axis=1)
+    
+    z_spread_perp_list = []
+    z_spread_senior_list = []
+    sss_list = []
+    bond_names = []
+    
+    for i in range(len(results_df2)):
+        z_spread_perp = df_reg2["SPREAD(spread_type='Z')"].iloc[i]
+        z_spread_senior = df_reg1[f"regression_{i}"].iloc[0]  # Use the unique regression field
+        sss = z_spread_perp - z_spread_senior
+        
+        z_spread_perp_list.append(z_spread_perp)
+        z_spread_senior_list.append(z_spread_senior)
+        sss_list.append(sss)
+        bond_names.append(results_df2["NAME"].iloc[i])
+    
+    # Create the final dataframe
+    df_final = pd.DataFrame({
+        'bond_name': bond_names,
+        'z-spread perp': z_spread_perp_list,
+        'z-spread senior': z_spread_senior_list,
+        'SSS': sss_list,
+    })
+
+    df_final['date'] = date_str
+    
+    return df_final
+all_results = []
+for dt in date_list:
+    date_str = dt.strftime('%Y-%m-%d')
+    try:
+        df_day = get_data_for_date(date_str)
+        all_results.append(df_day)
+        print(f"Registered spreads on {date_str}")
+    except Exception as e:
+        print(f"Error on {date_str}: {e}")
+
+# Concatenate all results
+combined_df = pd.concat(all_results, ignore_index=True)
+
+# drop duplicates to avoid error with unstack
+combined_df = combined_df.drop_duplicates(subset=['date', 'bond_name'], keep='last')
+
+# Reshape to get dates as index and bonds as columns
+final_df = combined_df.set_index(['date', 'bond_name']).unstack('bond_name')
+
+# Flatten column names to get: Bond_A_z-spread perp, Bond_A_z-spread senior, Bond_A_SSS, etc.
+final_df.columns = [f"{bond}_{metric}" for metric, bond in final_df.columns]
+Registered spreads on 2025-06-03
+Registered spreads on 2025-06-04
+def clean_z_spreads_by_change(df, max_daily_change=250, max_fill_days=10):
+    """
+    Clean z-spread columns by replacing extreme daily changes with last valid observation
+    
+    Parameters:
+    - df: DataFrame with bbg data
+    - max_daily_change: Maximum acceptable daily change in basis points
+    - max_fill_days: Maximum number of consecutive days to forward fill
+    """
+    
+    df_clean = df.copy()
+    
+    z_spread_cols = [col for col in df_clean.columns]
+    
+    cleaning_report = {}
+    
+    for col in z_spread_cols:
+        daily_change = df_clean[col].diff().abs()
+        
+        change_outliers = daily_change > max_daily_change
+        original_outliers = change_outliers.sum()
+        
+        df_clean.loc[change_outliers, col] = np.nan
+        
+        df_clean[col] = df_clean[col].fillna(method='ffill', limit=max_fill_days)
+        
+        remaining_nan = df_clean[col].isna().sum()
+        
+        cleaning_report[col] = {
+            'large_changes_found': original_outliers,
+            'changes_filled': original_outliers - remaining_nan,
+            'remaining_nan': remaining_nan
+        }
+        
+        print(f"{col}: {original_outliers} outliers found, {original_outliers - remaining_nan} filled")
+    
+    return df_clean, cleaning_report
+final_df_clean, report = clean_z_spreads_by_change(final_df, max_daily_change=500, max_fill_days=10)
+final_df = final_df_clean
+sss_columns = [col for col in final_df.columns if col.endswith('_SSS')]
+
+for sss_col in sss_columns:
+    bond_name = sss_col.replace('_SSS', '')
+    
+    rolling_window = final_df[sss_col].rolling(window=zscore_rolling_days, min_periods=10)
+    final_df[f'{bond_name}_SSS_zscore'] = (final_df[sss_col] - rolling_window.mean()) / rolling_window.std()      # z‑score = (x - μ) / σ 
+
+z_score_columns = [col for col in final_df.columns if col.endswith('_SSS_zscore')]
+window = zscore_rolling_days
+zscore_cols = {}
+
+for sss_col in final_df.columns:
+    if sss_col.endswith('_SSS'):
+        z_col = sss_col.replace('_SSS', '_Z')
+        roll_mean = final_df[sss_col].rolling(window, min_periods=10).mean()
+        roll_std  = final_df[sss_col].rolling(window, min_periods=10).std(ddof=0)
+
+        # z‑score = (x - μ) / σ 
+        final_df[z_col] = (final_df[sss_col] - roll_mean) / roll_std.replace(0, np.nan)
+        final_df[z_col] = final_df[z_col].fillna(0)
+
+        zscore_cols[sss_col] = z_col   
+zscore_summary = []
+for sss_col in sss_columns:
+    bond_name = sss_col.replace('_SSS', '')
+    z_col = zscore_cols[sss_col]  
+    last_zscore = final_df[z_col].iloc[-1]
+    zscore_summary.append(f'{bond_name}: {last_zscore:.2f}')
+fig, (ax_sss, ax_z) = plt.subplots(
+    nrows=2,
+    ncols=1,
+    figsize=(12, 8),
+    sharex=True,
+    gridspec_kw=dict(height_ratios=[3, 1], hspace=0.05)
+)
+
+sss_columns = [c for c in final_df.columns if c.endswith('_SSS')]
+color_cycle = plt.rcParams["axes.prop_cycle"].by_key()["color"]
+
+for i, sss_col in enumerate(sss_columns):
+    bond_name = sss_col.replace('_SSS', '')
+
+    col = color_cycle[i % len(color_cycle)]
+
+    ax_sss.plot(
+        final_df.index,
+        final_df[sss_col],
+        label=f'{bond_name} SSS',
+        linewidth=1,
+        alpha=0.8,
+        color=col
+    )
+
+ax_sss.set_ylabel('Senior‑Subordinated Spread (bps)')
+ax_sss.set_title(f'{input_user}')
+ax_sss.grid(True, alpha=0.3)
+
+
+for i, sss_col in enumerate(sss_columns):
+    bond_name = sss_col.replace('_SSS', '')
+    z_col = zscore_cols[sss_col]         
+    col = color_cycle[i % len(color_cycle)]
+
+    ax_z.plot(
+        final_df.index,
+        final_df[z_col],
+        label=f'{bond_name} z‑score',
+        linewidth=1,
+        alpha=0.8,
+        color=col
+    )
+
+ax_z.axhline(0, color='k', linewidth=0.8, linestyle='--')
+ax_z.axhline(2, color='r', linewidth=0.6, linestyle=':')
+ax_z.axhline(-2, color='r', linewidth=0.6, linestyle=':')
+
+ax_z.set_ylabel('Rolling z‑score')
+ax_z.set_xlabel('Date')
+ax_z.grid(True, alpha=0.3)
+
+zlim = max(abs(ax_z.get_ylim()[0]), abs(ax_z.get_ylim()[1]))
+ax_z.set_ylim(-zlim, zlim)
+
+ax_sss.legend(
+    bbox_to_anchor=(1.02, 1),
+    loc='upper left',
+    fontsize=9
+)
+
+ax_sss.xaxis.set_major_locator(plt.MaxNLocator(5))
+
+summary_text = []
+for sss_col in sss_columns:
+    bond_name = sss_col.replace('_SSS', '')
+    last_sss = final_df[sss_col].iloc[-1]
+    summary_text.append(f'{bond_name}: {last_sss:.0f} bps')
+
+fig.text(
+    0.92, 0.1,
+    'Senior Curve:\n'
+    '• Regression: Nelson‑Svensson‑Siegel\n'
+    '• Maturity: <30Y\n'
+    '• Amount Outstanding: >250M\n'
+    '\n'
+    '• Latest SSS Values:\n' + '\n'.join([f'• {t}' for t in summary_text]) + '\n'
+    '\n'
+    '• Latest Z-Scores:\n' + '\n'.join([f'• {text}' for text in zscore_summary]),
+)
+
+    
+plt.show()
+file_name = f'{input_user}_Hybrid_curve_spreads.xlsx'
+final_df.to_excel(file_name, index=True)
+
+from IPython.display import HTML, display
+import base64
+import os
+
+def create_download_link(filename):
+    """Create a download link for a file"""
+    with open(filename, "rb") as f:
+        data = f.read()
+    b64 = base64.b64encode(data).decode()
+    href = f'<a href="data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,{b64}" download="{os.path.basename(filename)}">Download {os.path.basename(filename)}</a>'
+    return href
+
+display(HTML(create_download_link(file_name)))
