@@ -1,5 +1,5 @@
 ## Foreword:
-This script allows to visualize relative value of hybrid credit bonds in terms of SSS (Sub to Senior spread) both from an historical and peers perspectives. Both systems work on Bloomberg's BQUANT (using Bloomberg data). They work by pulling the € curve of the issuer (selected in-app by user) and performing regression to interpolate over the maturity eactly equal to the Hybrid bond Next-Call-Date Rergression is pulled from bloomberg, and is done over points that match user requirements (maturity, amount outstanding) Interactive graphs are then plotted using plotly
+This script allows to visualize relative value of hybrid credit bonds in terms of SSS (Sub to Senior spread) both from an historical and peers perspectives. Both systems work on Bloomberg's BQUANT (using Bloomberg data). They work by pulling the € curve of the issuer (selected in-app by user) and performing regression to interpolate over the maturity eactly equal to the Hybrid bond Next-Call-Date Regression is pulled from bloomberg, and is done over points that match user requirements (maturity, amount outstanding) Interactive graphs are then plotted using plotly
 
 Different model of regression (limited to the one made available by bloomberg): Nelson-Siegel, Nelson-Siegel-Svensson, Linear, Linear-Log, Log-Log. as of now Polynomial and Quadratic models are not available on BQNT/BQL even if they are enabled in NIA<GO> 
 
@@ -13,7 +13,15 @@ https://github.com/voila-dashboards/voila/issues/1428
 
  
 # Monitor (comparables):
-This script is designed to monitor hybrid bonds, retrieve historical data, and perform regressions to calculate Sub-to-Senior Spreads (SSS).
+This script is designed to monitor hybrid bonds of sector, or a subset of companies based on several criterias, it retrieves historical data, and perform regressions to calculate Sub-to-Senior Spreads (SSS). It then handles data selection and visualisation. 
+Example: distribution
+<img width="1856" height="666" alt="monitor" src="https://github.com/user-attachments/assets/d3922f5a-be37-417a-bbe1-9a56c578c7e5" />
+
+Example: Summary Table
+<img width="1289" height="606" alt="table" src="https://github.com/user-attachments/assets/4c54b17b-2cde-456b-af14-8a459b7c4745" />
+
+Example: EDF
+<img width="1914" height="1024" alt="EDF" src="https://github.com/user-attachments/assets/02a96818-f381-4630-a64b-c50c93c88cc7" />
 
 ## Key Components:
 
@@ -51,7 +59,10 @@ go_button is the refresh button, assigned to execute run on click.
 Exports the main results df in a timestamped excel file, creates an HTML download link
 
 # Historicals:
-Arkema and Abertis appear to have no data associated when running the script on them, this issue is currently being investigated.
+This script is designed to monitor hybrid bonds of one particular company, it retrieves historical data, and perform regressions to calculate Sub-to-Senior Spreads (SSS) and Z-scores over a chosen period. It then handles data visualisation. 
+Example: Veolia
+<img width="1914" height="1024" alt="veolia2" src="https://github.com/user-attachments/assets/7fc780cc-f00d-4baa-b994-5ee75582ef12" />
+
 
 ## Key Components:
 
